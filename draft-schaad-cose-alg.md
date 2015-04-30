@@ -23,6 +23,7 @@ informative:
   RFC2119:
   RFC7159:
   RFC7049:
+  RFC7253:
   JWA:
    title: 'JWA'
    author:
@@ -54,7 +55,7 @@ The message formats have been documented in {{I-D.schaad-cose}} while this docum
 
 This document additionally defines some new algorithms that are commonly used in the constrained device world.
 
-# Key Derivation Function Primatives
+# Key Derivation Function Primitives
 
 The JOSE specifications all use a Key Derivation Fucntion (KDF) based on the Concat functionality from {{NIST-800-56A}}.  A new KDF primative is defined in this document to take its place.
 
@@ -106,13 +107,14 @@ HKDF can be used with algorithms other than HMAC as the expand step, but it is n
 
 The extract step can be omitted if the input keying material is uniformlly randon.  This is not generally the case for the result of a key agreement opertion or a human generated shared secret, but can be for a machine generated secret.
 
-# Elliptical Curve Key Agreement 
+# Key Managment Algorithms
+## Elliptical Curve Key Agreement 
 
-## Ephemeral-Static ECDH
+### Ephemeral-Static ECDH
 
 {{JWA}} defines a four different ECHD algorithms.  When used with the CBOR specificiation, these algorithms are unchanged except for the fact that HKDF as defined in Section 3 is used for the key derivation step.
 
-## Static-Static ECHD
+### Static-Static ECHD
 
 Static-Static ECHD (ECDH-SS) can be used as a form of origination validation.  When used in a mode where only one ECDH-SS is used as a recipient for a message, the sender can make an assumption that the message was created by the owner of the sender half of the static key agreement.  (This assumes that the sender knows that it did not send the message.)  This type of origination validation cannot be demonstrated to a third part as can be done with asymmetric signature algorithms.
 
@@ -134,25 +136,112 @@ ALTERNATE: We could potentially do this by using the salt field of the HKDF func
 
 Put in the template for defining the header parameter 'spk'.
 
-## Security Considerations
+### Security Considerations
 
 Reuse of the same two key pairs along with the same KDF parameters will lead to the same key being re-used.  This is generally considered to be bad practice.
+
+
+## Additional Curves
+
+Curve25519
+Goldilocks
+
+| text | int | KDF | KDF | Key Wrap |
+| key | key | COSE | JOSE | |
+| C25519-ES | - | HKDF | Concat | - |
+| C25519-ES+A128KW | - | HKDF | Concat | AES KW 128-bit |
+| C25519-ES+A256KW | - | HKDF | Concat | AES KW 256-bit |
+| Goldi-ES | - | HDKF | Concat | - |
+| Goldi-ES+A256KW | - | HKDF | Concat | AES KW 256-bit |
+
+
+A new key type is defined:
+
+kty = "EC1"
+Mandatory elements:
+
+x = Public key 
+
+
+## Direct key with KDF
+
+By combining a KDF function with a preshared secret, it is possible to extend the life of a shared secret as it does not ever get directly used.
+
+This mode can be used by keeping a counter that is used for the salt value in the HKDF function.  Each entity can keep it's own counter if the protocol specifies fixed values of 'apu' and 'apv' to be used .  For example one may be designated as the 'client' and one as the 'server'.  This will ensure that they will generate te same keys.  The counter can either be transmitted as part of the message or could be implicitly transmitted and both sides keep track of the other sides view of the counter as well.
 
 # Content Encryption Algorithms
 
 ## AES-CCM algorithm
 
+The CORE people are currently use the AES-CCM algorithm as their prefered content encryption algorithm.  The reference for AES-CCM is {{RFC3610}}.  
+
+| key | key | key | tag |
+| name | id | length | length |
+| AES-128-CCM-64 | - | 128 | 64 |
+
+
 ### IANA Considerations
 
 ### Security Considerations
 
-# Message Authentication Algorithms
+There have been security analysis and they generally look good.  Most of the complaints are about efficiency not security.  (http://csrc.nist.gov/groups/ST/toolkit/BCM/documents/proposedmodes/ccm/ccm-ad1.pdf)  (http://csrc.nist.gov/groups/ST/toolkit/BCM/documents/comments/800-38_Series-Drafts/CCM/RW_CCM_comments.pdf)  OCB is not as nice since it requires both an encrypt and a decrypt engine.
+
+
+## AES-OCB algorithm
+
+This is the hot new content encryption algorithm {{RFC7253}}.
+
+| key | key | key | tag |
+| name | id | length | length |
+| AES-128-OCB-64 | - | 128 | 64 |
+
+Key lengths are same as for AES - 128, 196, 256.
+Tag lengths are 64, 96, 128.
+Length of nonce   0 <= |nonce| <= 120 bits
+
+### Security Considerations
+
+Nonce must be non-repeating.  Nonces are public and can be a counter.
+
 
 ## AES-CBC-MAC algorithm
 
 ### IANA Considerations
 
 ### Security Considerations
+
+## ChaCha-Poly Algorithm
+
+It is the new hot bulk encryption algorithm
+
+algName = "ChaChaPoly"
+
+# Message Authentication Algorithms
+
+256-bit key
+96-bit nonce
+128-bit tag output
+
+
+# Signature Algorithms
+
+## Pintsov-Vanstone signature scheme with partial message recover (PVSSR)
+
+| name | id | curve | size of n | size of added data | Hash | Enc |
+| PVSRR-256-n-m | - | P-256 | n | m | SHA-256 | AES-CTR |
+
+
+### Security Considerations
+
+Pointer to security proof is http://grouper.ieee.org/groups/1363/Research/contributions/PVSigSec.pdf.  I have a problem understanding this as it talks about redundancy bytes in terms of adding addition information to the message part to be encrypted.  The security of the scheme is based on the amount of redundancy in the message.
+
+Security is based on the redundancy in n.  m allows for added redundancy to be added.  
+I don't believe that it is going to be easy for people to understand what they need to do to get the correct level of security. 
+As an example, if the text ends in binary data which is really random, the redundancy is high.
+If the text ends in a fixed type string (think "Launch ### missiles") then the redundancy could be as low as a couple of bits.
+This type of analysis could easily be beyond the capabilities of most protocol designers.
+
+Worry about the requirement that the random chosen must be unique - not stated in the proofs?  Can it be deterministic?  
 
 # IANA Considerations
 
